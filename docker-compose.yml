@@ -29,7 +29,7 @@ services:
       - ~/.ssh:/home/admin/.ssh:ro
       # Mount kubeconfig for kubectl
       - ~/.kube:/home/admin/.kube:ro
-    working_dir: /home/admin
+    # Note: working_dir stays as /app (default) for Python code
     networks:
       - warden
 
