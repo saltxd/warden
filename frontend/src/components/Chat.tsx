@@ -210,7 +210,8 @@ export function Chat() {
   return (
     <div
       style={{
-        height: '100vh',
+        height: '100dvh',
+        minHeight: '100vh',
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: colors.bg,
@@ -582,12 +583,13 @@ export function Chat() {
           display: 'flex',
           justifyContent: 'space-between',
           padding: '4px 16px',
+          paddingBottom: 'max(4px, env(safe-area-inset-bottom))',
           fontSize: '10px',
           color: colors.gray,
           borderTop: `1px solid ${colors.greenGhost}`,
         }}
       >
-        <span>bastion (10.0.2.10) → K3s + Proxmox cluster</span>
+        <span>bastion → K3s + Proxmox</span>
         <span>↑↓ history | Enter to send</span>
       </div>
 

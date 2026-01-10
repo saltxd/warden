@@ -4,14 +4,17 @@ import asyncio
 import uuid
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 
-from ..services.ssh_service import SSHService
-from ..services.claude_runner import ClaudeCodeRunner
-from ..config import settings
+from ..services.local_runner import LocalClaudeRunner
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def get_local_timestamp() -> str:
+    """Get current local time as ISO string."""
+    return datetime.now().astimezone().isoformat()
 
 
 def clean_terminal_output(text: str) -> str:
@@ -71,7 +74,7 @@ async def chat_websocket(websocket: WebSocket, session_id: Optional[str] = None)
                     {
                         "role": "user",
                         "content": user_message,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": get_local_timestamp(),
                     }
                 )
 
@@ -80,7 +83,7 @@ async def chat_websocket(websocket: WebSocket, session_id: Optional[str] = None)
                     {
                         "type": "user_message",
                         "content": user_message,
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": get_local_timestamp(),
                     }
                 )
 
@@ -140,37 +143,32 @@ Respond to the user's message:
 
     # Send "thinking" indicator
     await websocket.send_json(
-        {"type": "assistant_start", "timestamp": datetime.utcnow().isoformat()}
+        {"type": "assistant_start", "timestamp": get_local_timestamp()}
     )
 
     full_response = []
 
     try:
-        async with SSHService(
-            host=settings.BUILD_SERVER_HOST,
-            username=settings.BUILD_SERVER_USER,
-        ) as ssh:
-            claude = ClaudeCodeRunner(ssh)
+        claude = LocalClaudeRunner(workspace="/home/admin")
 
-            async def on_output(line: str):
-                # Clean terminal escape codes
-                cleaned = clean_terminal_output(line)
-                if cleaned:  # Only send non-empty lines
-                    full_response.append(cleaned)
-                    await websocket.send_json(
-                        {
-                            "type": "assistant_chunk",
-                            "content": cleaned,
-                            "timestamp": datetime.utcnow().isoformat(),
-                        }
-                    )
+        async def on_output(line: str):
+            # Clean terminal escape codes
+            cleaned = clean_terminal_output(line)
+            if cleaned:  # Only send non-empty lines
+                full_response.append(cleaned)
+                await websocket.send_json(
+                    {
+                        "type": "assistant_chunk",
+                        "content": cleaned,
+                        "timestamp": get_local_timestamp(),
+                    }
+                )
 
-            await claude.run_agent(
-                workspace="/home/admin",
-                prompt=prompt,
-                on_output=on_output,
-                timeout=300,  # 5 min timeout for chat
-            )
+        await claude.run_agent(
+            prompt=prompt,
+            on_output=on_output,
+            timeout=300,  # 5 min timeout for chat
+        )
 
     except Exception as e:
         logger.exception("Error processing message")
@@ -178,7 +176,7 @@ Respond to the user's message:
             {
                 "type": "error",
                 "content": f"Error: {str(e)}",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": get_local_timestamp(),
             }
         )
         return
@@ -189,13 +187,13 @@ Respond to the user's message:
         {
             "role": "assistant",
             "content": assistant_message,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": get_local_timestamp(),
         }
     )
 
     # Send completion
     await websocket.send_json(
-        {"type": "assistant_done", "timestamp": datetime.utcnow().isoformat()}
+        {"type": "assistant_done", "timestamp": get_local_timestamp()}
     )
 
 
