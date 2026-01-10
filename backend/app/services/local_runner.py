@@ -34,10 +34,12 @@ class LocalClaudeRunner:
         encoded_prompt = base64.b64encode(prompt.encode()).decode()
 
         # Build command - decode prompt and pipe to claude
+        # Use full path to claude in case PATH isn't set
+        claude_path = "/usr/bin/claude"
         command = (
             f'cd {self.workspace} && '
             f'echo "{encoded_prompt}" | base64 -d | '
-            f'claude --dangerously-skip-permissions --print -'
+            f'{claude_path} --dangerously-skip-permissions --print -'
         )
 
         logger.info(f"Running Claude Code locally in {self.workspace}")

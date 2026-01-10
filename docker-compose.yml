@@ -15,15 +15,21 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
+    user: "${UID:-1000}:${GID:-1000}"
     environment:
       - PYTHONUNBUFFERED=1
-      - BUILD_SERVER_HOST=10.0.2.10
-      - BUILD_SERVER_USER=admin
-      - SSH_KEY_PATH=/root/.ssh/id_ed25519
+      - HOME=/home/admin
+      - PATH=/usr/local/bin:/usr/bin:/bin:/home/admin/.local/bin
     volumes:
-      # Mount SSH keys from host (read-only)
-      - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
-      - ~/.ssh/known_hosts:/root/.ssh/known_hosts:ro
+      # Mount Claude Code binary
+      - /usr/bin/claude:/usr/bin/claude:ro
+      # Mount Claude config (needed for auth)
+      - ~/.claude:/home/admin/.claude
+      # Mount SSH keys for node access
+      - ~/.ssh:/home/admin/.ssh:ro
+      # Mount kubeconfig for kubectl
+      - ~/.kube:/home/admin/.kube:ro
+    working_dir: /home/admin
     networks:
       - warden
 
