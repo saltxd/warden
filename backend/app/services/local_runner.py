@@ -30,28 +30,26 @@ class LocalClaudeRunner:
         Returns:
             True if successful, False otherwise
         """
-        # Encode prompt to handle special characters
-        encoded_prompt = base64.b64encode(prompt.encode()).decode()
-
-        # Build command - decode prompt and pipe to claude
-        # Use full path to claude in case PATH isn't set
         claude_path = "/usr/bin/claude"
-        command = (
-            f'cd {self.workspace} && '
-            f'echo "{encoded_prompt}" | base64 -d | '
-            f'{claude_path} --dangerously-skip-permissions --print -'
-        )
 
         logger.info(f"Running Claude Code locally in {self.workspace}")
 
         try:
-            # Create subprocess
-            process = await asyncio.create_subprocess_shell(
-                command,
+            # Create subprocess with explicit bash and stdin for prompt
+            process = await asyncio.create_subprocess_exec(
+                "/bin/bash", "-c",
+                f'cd {self.workspace} && {claude_path} --dangerously-skip-permissions --print -',
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                env={**os.environ, "PYTHONUNBUFFERED": "1", "HOME": self.workspace},
             )
+
+            # Write prompt to stdin and close it
+            process.stdin.write(prompt.encode())
+            await process.stdin.drain()
+            process.stdin.close()
+            await process.stdin.wait_closed()
 
             # Stream output line by line
             async def read_output():
