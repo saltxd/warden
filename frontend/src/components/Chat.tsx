@@ -496,14 +496,11 @@ export function Chat() {
                 {stripMarkdown(currentResponse)}
               </pre>
             ) : (
-              <span
-                style={{
-                  color: colors.greenDim,
-                  animation: 'blink 1s step-end infinite',
-                }}
-              >
-                Processing...
-                <span style={{ animation: 'blink 0.5s step-end infinite' }}>_</span>
+              <span style={{ color: colors.greenDim }}>
+                Processing
+                <span className="dot dot-1">.</span>
+                <span className="dot dot-2">.</span>
+                <span className="dot dot-3">.</span>
               </span>
             )}
           </div>
@@ -599,6 +596,20 @@ export function Chat() {
           0%, 50% { opacity: 1; }
           51%, 100% { opacity: 0; }
         }
+
+        /* Processing dots pulse */
+        @keyframes dot-pulse {
+          0%, 20% { opacity: 0.3; }
+          40% { opacity: 1; color: #33ff33; text-shadow: 0 0 8px #33ff33; }
+          60%, 100% { opacity: 0.3; }
+        }
+
+        .dot {
+          animation: dot-pulse 1.4s ease-in-out infinite;
+        }
+        .dot-1 { animation-delay: 0s; }
+        .dot-2 { animation-delay: 0.2s; }
+        .dot-3 { animation-delay: 0.4s; }
 
         /* Node status dots pulse */
         @keyframes node-pulse {
