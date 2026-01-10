@@ -23,8 +23,9 @@ services:
     volumes:
       # Mount Claude Code binary
       - /usr/bin/claude:/usr/bin/claude:ro
-      # Mount Claude config (needed for auth)
+      # Mount Claude config files (needed for auth)
       - ~/.claude:/home/admin/.claude
+      - ~/.claude.json:/home/admin/.claude.json
       # Mount SSH keys for node access
       - ~/.ssh:/home/admin/.ssh:ro
       # Mount kubeconfig for kubectl
