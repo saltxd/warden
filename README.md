@@ -164,12 +164,33 @@ Tasks are executed via SSH based on prompt keywords:
 
 ## Screenshots
 
-The UI features a dark sci-fi aesthetic with:
+### Dashboard
+The main dashboard features a tactical network topology with hexagonal nodes showing real-time CPU usage, animated data flow particles, and quick action cards.
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Deploy AI Agent Modal
+Mission briefing style modal for deploying Claude Code agents to target nodes with template quick-starts and real-time CPU monitoring.
+
+![Deploy Modal](docs/screenshots/deploy-modal.png)
+
+### Task Execution Detail
+Live task monitoring with progress tracking, SSH log streaming, and completion status in a command center aesthetic.
+
+![Task Detail](docs/screenshots/task-detail.png)
+
+### Automation Modal
+Run predefined automation workflows across your infrastructure with the same mission briefing interface.
+
+![Automation Modal](docs/screenshots/automation-modal.png)
+
+### UI Features
 - Hexagonal node visualization with status-based glow effects
 - Animated particles along connection lines when tasks run
+- HUD-style corner brackets and scan line effects
 - Bottom sheet modal for task creation
-- Live log streaming with syntax highlighting
-- Progress ring animations
+- Live log streaming with terminal styling
+- Spring-animated metrics in the status bar
 
 ## Development
 

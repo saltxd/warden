@@ -1,5 +1,5 @@
 import { motion, useSpring, useTransform } from 'framer-motion'
-import { Cpu, MemoryStick, HardDrive, Activity } from 'lucide-react'
+import { Cpu, MemoryStick, HardDrive, Activity, Wifi } from 'lucide-react'
 import { useEffect } from 'react'
 import { useMetrics } from '../hooks'
 import { useStore } from '../store/useStore'
@@ -20,25 +20,46 @@ function AnimatedNumber({ value, decimals = 0 }: AnimatedNumberProps) {
   return <motion.span>{display}</motion.span>
 }
 
-interface MetricProps {
+interface MetricItemProps {
   icon: React.ReactNode
   label: string
   value: React.ReactNode
   unit?: string
-  color?: string
+  color: 'cyan' | 'yellow' | 'red' | 'green' | 'purple'
 }
 
-function Metric({ icon, label, value, unit, color = 'text-gray-300' }: MetricProps) {
+function MetricItem({ icon, label, value, unit, color }: MetricItemProps) {
+  const colorClasses = {
+    cyan: 'text-cyan-400',
+    yellow: 'text-yellow-400',
+    red: 'text-red-400',
+    green: 'text-green-400',
+    purple: 'text-purple-400',
+  }
+
+  const glowColors = {
+    cyan: 'rgba(0, 255, 255, 0.5)',
+    yellow: 'rgba(234, 179, 8, 0.5)',
+    red: 'rgba(239, 68, 68, 0.5)',
+    green: 'rgba(34, 197, 94, 0.5)',
+    purple: 'rgba(168, 85, 247, 0.5)',
+  }
+
   return (
-    <div className="flex items-center gap-1.5 px-2">
-      <span className={color}>{icon}</span>
-      <span className="text-gray-500 text-[10px] uppercase hidden sm:inline">
-        {label}:
-      </span>
-      <span className="text-white font-medium">
-        {value}
-        {unit && <span className="text-gray-400 text-[10px] ml-0.5">{unit}</span>}
-      </span>
+    <div className="flex items-center gap-2">
+      <span className={`${colorClasses[color]} opacity-70`}>{icon}</span>
+      <div className="flex flex-col">
+        <span className="text-[9px] text-gray-500 font-mono tracking-widest uppercase">
+          {label}
+        </span>
+        <span
+          className={`text-sm font-bold font-mono ${colorClasses[color]}`}
+          style={{ textShadow: `0 0 10px ${glowColors[color]}` }}
+        >
+          {value}
+          {unit && <span className="text-[10px] text-gray-500 ml-0.5">{unit}</span>}
+        </span>
+      </div>
     </div>
   )
 }
@@ -48,63 +69,99 @@ export function MetricsTicker() {
   const { runningTaskCount } = useStore()
   const runningTasks = runningTaskCount()
 
-  // Use API metrics or fallback to 0
   const avgCpu = metrics?.total_cpu_percent ?? 0
   const totalRamUsed = metrics?.total_ram_used_gb ?? 0
   const totalRamTotal = metrics?.total_ram_total_gb ?? 0
   const totalDiskUsed = metrics?.total_disk_used_tb ?? 0
+  const nodesOnline = metrics?.nodes_online ?? 0
+  const nodesTotal = metrics?.nodes_total ?? 0
+
+  // Determine CPU color based on usage
+  const cpuColor = avgCpu > 80 ? 'red' : avgCpu > 60 ? 'yellow' : 'green'
+  const nodeColor = nodesOnline < nodesTotal ? 'yellow' : 'cyan'
 
   return (
-    <footer className="fixed bottom-0 left-0 right-0 h-12 bg-black/80 backdrop-blur-lg border-t border-white/10 flex items-center justify-around text-xs z-50 safe-bottom">
-      {/* CPU */}
-      <Metric
-        icon={<Cpu className="w-3.5 h-3.5" />}
-        label="CPU"
-        value={<AnimatedNumber value={avgCpu} />}
-        unit="%"
-        color={avgCpu > 80 ? 'text-red-400' : avgCpu > 60 ? 'text-amber-400' : 'text-green-400'}
-      />
+    <footer className="fixed bottom-0 left-0 right-0 z-50">
+      {/* Top border glow */}
+      <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
 
-      {/* Divider */}
-      <div className="h-4 w-px bg-white/20" />
+      <div className="bg-black/95 backdrop-blur-xl px-4 py-2 safe-bottom">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          {/* Left: System status */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <div className="absolute inset-0 w-2 h-2 rounded-full bg-green-500 animate-ping" />
+            </div>
+            <span className="text-[10px] font-mono text-green-500 tracking-wider hidden sm:inline">
+              SYSTEMS NOMINAL
+            </span>
+          </div>
 
-      {/* RAM */}
-      <Metric
-        icon={<MemoryStick className="w-3.5 h-3.5" />}
-        label="RAM"
-        value={
-          <>
-            <AnimatedNumber value={totalRamUsed} decimals={1} />
-            <span className="text-gray-500">/</span>
-            <AnimatedNumber value={totalRamTotal} decimals={0} />
-          </>
-        }
-        unit="GB"
-        color="text-blue-400"
-      />
+          {/* Center: Metrics */}
+          <div className="flex items-center gap-4 sm:gap-6">
+            <MetricItem
+              icon={<Cpu className="w-3.5 h-3.5" />}
+              label="CPU"
+              value={<AnimatedNumber value={avgCpu} />}
+              unit="%"
+              color={cpuColor}
+            />
 
-      {/* Divider */}
-      <div className="h-4 w-px bg-white/20" />
+            <div className="h-6 w-px bg-white/10 hidden sm:block" />
 
-      {/* Disk */}
-      <Metric
-        icon={<HardDrive className="w-3.5 h-3.5" />}
-        label="Disk"
-        value={<AnimatedNumber value={totalDiskUsed} decimals={2} />}
-        unit="TB"
-        color="text-purple-400"
-      />
+            <MetricItem
+              icon={<MemoryStick className="w-3.5 h-3.5" />}
+              label="RAM"
+              value={
+                <>
+                  <AnimatedNumber value={totalRamUsed} decimals={1} />
+                  <span className="text-gray-500 mx-0.5">/</span>
+                  <AnimatedNumber value={totalRamTotal} decimals={0} />
+                </>
+              }
+              unit="GB"
+              color="cyan"
+            />
 
-      {/* Divider */}
-      <div className="h-4 w-px bg-white/20" />
+            <div className="h-6 w-px bg-white/10 hidden sm:block" />
 
-      {/* Tasks */}
-      <Metric
-        icon={<Activity className="w-3.5 h-3.5" />}
-        label="Tasks"
-        value={runningTasks}
-        color={runningTasks > 0 ? 'text-neon-cyan' : 'text-gray-400'}
-      />
+            <MetricItem
+              icon={<HardDrive className="w-3.5 h-3.5" />}
+              label="DISK"
+              value={<AnimatedNumber value={totalDiskUsed} decimals={2} />}
+              unit="TB"
+              color="purple"
+            />
+
+            <div className="h-6 w-px bg-white/10 hidden sm:block" />
+
+            <MetricItem
+              icon={<Wifi className="w-3.5 h-3.5" />}
+              label="NODES"
+              value={`${nodesOnline}/${nodesTotal}`}
+              color={nodeColor}
+            />
+
+            {runningTasks > 0 && (
+              <>
+                <div className="h-6 w-px bg-white/10" />
+                <MetricItem
+                  icon={<Activity className="w-3.5 h-3.5 animate-pulse" />}
+                  label="ACTIVE"
+                  value={runningTasks}
+                  color="cyan"
+                />
+              </>
+            )}
+          </div>
+
+          {/* Right: Timestamp */}
+          <div className="text-[10px] font-mono text-gray-600 hidden sm:block">
+            {new Date().toLocaleTimeString('en-US', { hour12: false })}
+          </div>
+        </div>
+      </div>
     </footer>
   )
 }

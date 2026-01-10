@@ -1,3 +1,4 @@
+export { Background } from './Background'
 export { Header } from './Header'
 export { NetworkGraph } from './NetworkGraph'
 export { QuickActions } from './QuickActions'

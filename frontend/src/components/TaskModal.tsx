@@ -1,24 +1,112 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import type { PanInfo } from 'framer-motion'
-import { X, Rocket, Server, Loader2 } from 'lucide-react'
+import { X, Rocket, Server, Loader2, Target, Terminal, Cpu, AlertTriangle } from 'lucide-react'
 import { useState, useEffect, useCallback } from 'react'
 import { useNodes } from '../hooks'
 import { useStore } from '../store/useStore'
 import { mockTemplates } from '../data/mockData'
 import { modalVariants, backdropVariants } from '../styles/animations'
 import { API_URL } from '../config'
-import type { Task, ModalType } from '../types'
+import type { Task, ModalType, Node } from '../types'
 
-const modalTitles: Record<Exclude<ModalType, null>, string> = {
-  deploy: 'DEPLOY AI AGENT',
-  automation: 'RUN AUTOMATION',
-  analysis: 'ANALYZE LOGS',
+const modalConfig: Record<Exclude<ModalType, null>, { title: string; subtitle: string; color: string; glow: string }> = {
+  deploy: {
+    title: 'DEPLOY AI AGENT',
+    subtitle: 'MISSION BRIEF // AI-001',
+    color: 'cyan',
+    glow: 'rgba(0, 255, 255, 0.5)',
+  },
+  automation: {
+    title: 'RUN AUTOMATION',
+    subtitle: 'MISSION BRIEF // WF-002',
+    color: 'purple',
+    glow: 'rgba(168, 85, 247, 0.5)',
+  },
+  analysis: {
+    title: 'ANALYZE LOGS',
+    subtitle: 'MISSION BRIEF // AN-003',
+    color: 'amber',
+    glow: 'rgba(245, 158, 11, 0.5)',
+  },
 }
 
-const modalDescriptions: Record<Exclude<ModalType, null>, string> = {
-  deploy: 'Launch a Claude Code agent on the target node',
-  automation: 'Execute an automated workflow',
-  analysis: 'Run AI-powered analysis on logs',
+interface NodeCardProps {
+  node: Node
+  isSelected: boolean
+  onClick: () => void
+}
+
+function NodeCard({ node, isSelected, onClick }: NodeCardProps) {
+  const isOffline = node.status === 'offline'
+  const cpuColor = node.cpu_percent > 80 ? 'red' : node.cpu_percent > 60 ? 'yellow' : 'green'
+
+  const colorClasses = {
+    green: 'text-green-400',
+    yellow: 'text-yellow-400',
+    red: 'text-red-400',
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={isOffline}
+      className={`
+        relative flex items-center gap-3 p-3 rounded-lg border transition-all duration-200
+        ${isSelected
+          ? 'border-cyan-500/60 bg-cyan-500/10'
+          : 'border-white/10 bg-black/40 hover:border-white/20 hover:bg-white/5'
+        }
+        ${isOffline ? 'opacity-40 cursor-not-allowed' : ''}
+      `}
+      style={isSelected ? { boxShadow: '0 0 20px rgba(0, 255, 255, 0.2)' } : {}}
+    >
+      {/* Node icon with status ring */}
+      <div className="relative">
+        <div
+          className={`w-10 h-10 rounded-lg flex items-center justify-center border
+            ${isSelected ? 'border-cyan-500/50 bg-cyan-500/20' : 'border-white/10 bg-white/5'}
+          `}
+        >
+          <Server className={`w-5 h-5 ${isSelected ? 'text-cyan-400' : 'text-gray-400'}`} />
+        </div>
+        {/* Status indicator */}
+        <div
+          className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-gray-900
+            ${isOffline ? 'bg-gray-500' : 'bg-green-500'}
+          `}
+        />
+      </div>
+
+      {/* Node info */}
+      <div className="flex-1 text-left min-w-0">
+        <div className={`text-sm font-bold font-mono ${isSelected ? 'text-cyan-400' : 'text-white'}`}>
+          {node.name.toUpperCase()}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-1">
+            <Cpu className={`w-3 h-3 ${colorClasses[cpuColor]}`} />
+            <span className={`text-[10px] font-mono ${colorClasses[cpuColor]}`}>
+              {node.cpu_percent}%
+            </span>
+          </div>
+          <span className="text-[10px] font-mono text-gray-500 uppercase">
+            {node.status}
+          </span>
+        </div>
+      </div>
+
+      {/* Selection indicator */}
+      {isSelected && (
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="w-5 h-5 rounded-full bg-cyan-500 flex items-center justify-center"
+        >
+          <div className="w-2 h-2 rounded-full bg-black" />
+        </motion.div>
+      )}
+    </button>
+  )
 }
 
 export function TaskModal() {
@@ -157,6 +245,8 @@ export function TaskModal() {
 
   if (!modalType) return null
 
+  const config = modalConfig[modalType]
+
   return (
     <AnimatePresence>
       {isModalOpen && (
@@ -168,7 +258,7 @@ export function TaskModal() {
             animate="visible"
             exit="exit"
             onClick={closeModal}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-50"
           />
 
           {/* Modal */}
@@ -181,149 +271,191 @@ export function TaskModal() {
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.2}
             onDragEnd={handleDragEnd}
-            className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 rounded-t-2xl max-h-[85vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 z-50 max-h-[90vh] overflow-y-auto"
           >
-            {/* Drag handle */}
-            <div className="flex justify-center py-3">
-              <div className="w-10 h-1 bg-gray-600 rounded-full" />
-            </div>
+            {/* Modal container with border glow */}
+            <div
+              className="bg-gray-950 rounded-t-2xl border-t border-x border-cyan-500/30 relative"
+              style={{ boxShadow: `0 -10px 40px ${config.glow}` }}
+            >
+              {/* Corner brackets */}
+              <div className="absolute top-3 left-3 w-4 h-4 border-l-2 border-t-2 border-cyan-500/50" />
+              <div className="absolute top-3 right-3 w-4 h-4 border-r-2 border-t-2 border-cyan-500/50" />
 
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-white">{modalTitles[modalType]}</h2>
-                <p className="text-xs text-gray-400 mt-0.5">{modalDescriptions[modalType]}</p>
-              </div>
-              <button
-                onClick={closeModal}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-                aria-label="Close modal"
-              >
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="px-4 pb-6 space-y-4">
-              {/* Prompt textarea */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
-                  What should the agent do?
-                </label>
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Describe the task..."
-                  rows={4}
-                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/50 resize-none"
-                />
+              {/* Drag handle */}
+              <div className="flex justify-center py-3">
+                <div className="w-12 h-1 bg-cyan-500/30 rounded-full" />
               </div>
 
-              {/* Template buttons */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
-                  Quick Templates
-                </label>
-                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-                  {mockTemplates.map((template) => (
-                    <button
-                      key={template.id}
-                      onClick={() => handleTemplateSelect(template)}
-                      className="flex-shrink-0 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-full text-xs text-gray-300 transition-colors whitespace-nowrap"
-                    >
-                      <span className="mr-1">{template.icon}</span>
-                      {template.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Node selector */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
-                  Target Node
-                </label>
-                {nodesLoading && nodes.length === 0 ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-5 h-5 text-neon-cyan animate-spin" />
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-6 h-6 rounded bg-cyan-500/20 flex items-center justify-center">
+                      <Target className="w-3.5 h-3.5 text-cyan-400" />
+                    </div>
+                    <span className="text-[9px] font-mono text-cyan-400/60 tracking-wider">
+                      {config.subtitle}
+                    </span>
                   </div>
-                ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {[...nodes].sort((a, b) => a.cpu_percent - b.cpu_percent).map((node) => (
-                    <button
-                      key={node.id}
-                      onClick={() => setSelectedNode(node.id)}
-                      disabled={node.status === 'offline'}
-                      className={`
-                        flex items-center gap-2 px-3 py-2 rounded-lg border transition-all
-                        ${selectedNode === node.id
-                          ? 'border-neon-cyan bg-neon-cyan/10'
-                          : 'border-white/10 bg-white/5 hover:bg-white/10'
-                        }
-                        ${node.status === 'offline' ? 'opacity-50 cursor-not-allowed' : ''}
-                      `}
-                    >
-                      <Server className={`w-4 h-4 ${selectedNode === node.id ? 'text-neon-cyan' : 'text-gray-400'}`} />
-                      <div className="text-left">
-                        <div className={`text-sm font-medium ${selectedNode === node.id ? 'text-neon-cyan' : 'text-white'}`}>
-                          {node.name}
-                        </div>
-                        <div className="text-[10px] text-gray-500">
-                          CPU: {node.cpu_percent}% | {node.status}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                  <h2
+                    className="text-xl font-bold text-cyan-400 tracking-wider"
+                    style={{ textShadow: `0 0 20px ${config.glow}` }}
+                  >
+                    {config.title}
+                  </h2>
                 </div>
-                )}
+                <button
+                  onClick={closeModal}
+                  className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 flex items-center justify-center hover:border-red-500/50 hover:bg-red-500/10 transition-all group"
+                  aria-label="Close modal"
+                >
+                  <X className="w-4 h-4 text-gray-400 group-hover:text-red-400 transition-colors" />
+                </button>
               </div>
 
-              {/* Target input */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-2 uppercase tracking-wider">
-                  Target Path (optional)
-                </label>
-                <input
-                  type="text"
-                  value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                  placeholder="/home/user/project"
-                  className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-500 text-sm font-mono focus:outline-none focus:border-neon-cyan/50 focus:ring-1 focus:ring-neon-cyan/50"
-                />
-              </div>
+              {/* Content */}
+              <div className="px-5 pb-8 space-y-5">
+                {/* Prompt textarea */}
+                <div>
+                  <label className="flex items-center gap-2 text-[10px] font-mono text-gray-400 mb-2 tracking-wider">
+                    <Terminal className="w-3 h-3" />
+                    MISSION OBJECTIVE
+                  </label>
+                  <div className="relative">
+                    <textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      placeholder="Describe what the agent should accomplish..."
+                      rows={4}
+                      className="w-full bg-black/60 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 text-sm font-mono focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 resize-none transition-all"
+                      style={{ boxShadow: prompt ? `0 0 20px ${config.glow}` : 'none' }}
+                    />
+                    {/* Character count */}
+                    <span className="absolute bottom-2 right-2 text-[9px] font-mono text-gray-600">
+                      {prompt.length}/500
+                    </span>
+                  </div>
+                </div>
 
-              {/* Launch button */}
-              <motion.button
-                onClick={handleLaunch}
-                disabled={!selectedNode || !prompt.trim() || isLaunching}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className={`
-                  w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2
-                  transition-all duration-200
-                  ${!selectedNode || !prompt.trim() || isLaunching
-                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                    : 'bg-neon-cyan text-black hover:neon-glow-cyan'
+                {/* Template buttons */}
+                <div>
+                  <label className="flex items-center gap-2 text-[10px] font-mono text-gray-400 mb-2 tracking-wider">
+                    <AlertTriangle className="w-3 h-3" />
+                    QUICK TEMPLATES
+                  </label>
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                    {mockTemplates.map((template) => (
+                      <motion.button
+                        key={template.id}
+                        onClick={() => handleTemplateSelect(template)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="flex-shrink-0 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-cyan-500/30 rounded-lg text-[11px] font-mono text-gray-300 transition-all whitespace-nowrap"
+                      >
+                        <span className="mr-1.5">{template.icon}</span>
+                        {template.name}
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Node selector */}
+                <div>
+                  <label className="flex items-center gap-2 text-[10px] font-mono text-gray-400 mb-2 tracking-wider">
+                    <Server className="w-3 h-3" />
+                    TARGET NODE
+                  </label>
+                  {nodesLoading && nodes.length === 0 ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-6 h-6 text-cyan-500 animate-spin" />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {[...nodes].sort((a, b) => a.cpu_percent - b.cpu_percent).map((node) => (
+                        <NodeCard
+                          key={node.id}
+                          node={node}
+                          isSelected={selectedNode === node.id}
+                          onClick={() => setSelectedNode(node.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Target path input */}
+                <div>
+                  <label className="flex items-center gap-2 text-[10px] font-mono text-gray-400 mb-2 tracking-wider">
+                    <Target className="w-3 h-3" />
+                    TARGET PATH
+                    <span className="text-gray-600">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={target}
+                    onChange={(e) => setTarget(e.target.value)}
+                    placeholder="/home/user/project"
+                    className="w-full bg-black/60 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-600 text-sm font-mono focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 transition-all"
+                  />
+                </div>
+
+                {/* Launch button */}
+                <motion.button
+                  onClick={handleLaunch}
+                  disabled={!selectedNode || !prompt.trim() || isLaunching}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`
+                    relative w-full py-4 rounded-lg font-bold text-sm tracking-wider
+                    flex items-center justify-center gap-3
+                    transition-all duration-200 overflow-hidden
+                    ${!selectedNode || !prompt.trim() || isLaunching
+                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700'
+                      : 'bg-cyan-500 text-black border border-cyan-400'
+                    }
+                  `}
+                  style={
+                    selectedNode && prompt.trim() && !isLaunching
+                      ? { boxShadow: '0 0 30px rgba(0, 255, 255, 0.4)' }
+                      : {}
                   }
-                `}
-              >
-                {isLaunching ? (
-                  <>
+                >
+                  {/* Shimmer effect when enabled */}
+                  {selectedNode && prompt.trim() && !isLaunching && (
                     <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    >
-                      <Rocket className="w-4 h-4" />
-                    </motion.div>
-                    Launching...
-                  </>
-                ) : (
-                  <>
-                    <Rocket className="w-4 h-4" />
-                    Launch Agent
-                  </>
-                )}
-              </motion.button>
+                      className="absolute inset-0"
+                      style={{
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                        backgroundSize: '200% 100%',
+                      }}
+                      animate={{ backgroundPosition: ['200% 0', '-200% 0'] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                    />
+                  )}
+
+                  {isLaunching ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      >
+                        <Rocket className="w-5 h-5" />
+                      </motion.div>
+                      <span>LAUNCHING...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="w-5 h-5" />
+                      <span>INITIATE MISSION</span>
+                    </>
+                  )}
+                </motion.button>
+              </div>
+
+              {/* Bottom corner brackets */}
+              <div className="absolute bottom-3 left-3 w-4 h-4 border-l-2 border-b-2 border-cyan-500/30" />
+              <div className="absolute bottom-3 right-3 w-4 h-4 border-r-2 border-b-2 border-cyan-500/30" />
             </div>
           </motion.div>
         </>
