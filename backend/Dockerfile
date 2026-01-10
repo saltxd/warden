@@ -11,6 +11,10 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Create user with UID 1000 (matches host user for volume mounts)
+RUN groupadd -g 1000 admin && \
+    useradd -u 1000 -g 1000 -m -s /bin/bash admin
+
 # Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
