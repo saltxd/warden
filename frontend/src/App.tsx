@@ -1,64 +1,7 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { useStore } from './store/useStore'
-import {
-  Background,
-  Header,
-  NetworkGraph,
-  QuickActions,
-  ActiveOperations,
-  MetricsTicker,
-  TaskModal,
-  TaskDetail,
-} from './components'
-import { pageVariants } from './styles/animations'
+import { Chat } from './components/Chat'
 
 function App() {
-  const { activeTask } = useStore()
-
-  return (
-    <div className="min-h-screen">
-      {/* Animated sci-fi background */}
-      <Background />
-      {/* Fixed header */}
-      <Header />
-
-      {/* Main content area */}
-      <main className="pt-16 pb-14 px-4 max-w-4xl mx-auto">
-        <AnimatePresence mode="wait">
-          {activeTask ? (
-            <motion.div
-              key="task-detail"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
-              <TaskDetail task={activeTask} />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="dashboard"
-              variants={pageVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="py-4"
-            >
-              <NetworkGraph />
-              <QuickActions />
-              <ActiveOperations />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </main>
-
-      {/* Fixed metrics ticker at bottom */}
-      <MetricsTicker />
-
-      {/* Task creation modal */}
-      <TaskModal />
-    </div>
-  )
+  return <Chat />
 }
 
 export default App

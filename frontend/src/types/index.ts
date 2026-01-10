@@ -52,3 +52,62 @@ export interface Notification {
   timestamp: string
   read: boolean
 }
+
+// ============================================
+// Multi-Agent System Types
+// ============================================
+
+export type AgentStatus = 'available' | 'working' | 'offline'
+export type AgentSpec = 'frontend' | 'backend' | 'devops' | 'reviewer' | 'fullstack'
+export type JobStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+export interface Agent {
+  id: string
+  name: string
+  spec: AgentSpec
+  description: string
+  skills: string[]
+  color: string
+  vm_host: string
+  ssh_user: string
+  working_directory: string
+  status: AgentStatus
+  current_job_id: string | null
+  jobs_completed: number
+  success_rate: number
+}
+
+export interface JobAgent {
+  agent_id: string
+  status: 'waiting' | 'working' | 'done' | 'error'
+  progress: number
+  current_task: string | null
+}
+
+export interface ActivityLogEntry {
+  timestamp: string
+  agent_id: string
+  message: string
+}
+
+export interface Job {
+  id: string
+  name: string
+  description: string
+  agents: JobAgent[]
+  status: JobStatus
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  progress: number
+  repository: string | null
+  activity_log: ActivityLogEntry[]
+  artifacts: string[]
+}
+
+export interface JobCreate {
+  name: string
+  description: string
+  agent_ids: string[]
+  repository?: string
+}

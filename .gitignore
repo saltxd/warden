@@ -47,8 +47,14 @@ coverage/
 # PWA
 dev-dist/
 
-# Misc
+# Sensitive files
 *.pem
+*.key
+id_*
+secrets/
+credentials.json
+
+# Misc
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

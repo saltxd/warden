@@ -37,10 +37,19 @@ class Settings(BaseSettings):
     SSH_USER: str = "root"
     SSH_KEY_PATH: str = os.path.expanduser("~/.ssh/id_ed25519")
 
+    # Build Server (for Claude Code execution)
+    BUILD_SERVER_HOST: str = "10.0.2.10"  # bastion - dedicated build server
+    BUILD_SERVER_USER: str = "admin"
+    BUILD_SERVER_PORT: int = 22
+    PROJECTS_BASE_PATH: str = "/home/admin/projects"
+
+    # Agent execution timeouts
+    AGENT_TIMEOUT: int = 600  # 10 minutes per agent
+
     # Server
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177"
 
     @property
     def cors_origins_list(self) -> List[str]:

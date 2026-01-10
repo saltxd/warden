@@ -1,3 +1,5 @@
 export { useNodes } from './useNodes'
 export { useMetrics } from './useMetrics'
 export { useHealth } from './useHealth'
+export { useAgents } from './useAgents'
+export { useJobs, useJobStream } from './useJobs'

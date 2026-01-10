@@ -81,3 +81,74 @@ class ClusterMetrics(BaseModel):
     nodes_online: int
     nodes_total: int
     running_tasks: int
+
+
+# ============================================
+# Multi-Agent System Models
+# ============================================
+
+class AgentStatus(str, Enum):
+    available = "available"
+    working = "working"
+    offline = "offline"
+
+
+class AgentSpec(str, Enum):
+    frontend = "frontend"
+    backend = "backend"
+    devops = "devops"
+    reviewer = "reviewer"
+    fullstack = "fullstack"
+
+
+class Agent(BaseModel):
+    id: str
+    name: str
+    spec: AgentSpec
+    description: str
+    skills: List[str]
+    color: str  # Hex color for avatar gradient
+    vm_host: str  # Which VM/node to run on
+    ssh_user: str
+    working_directory: str
+    status: AgentStatus = AgentStatus.available
+    current_job_id: Optional[str] = None
+    jobs_completed: int = 0
+    success_rate: float = 100.0
+
+
+class JobStatus(str, Enum):
+    queued = "queued"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
+class JobAgent(BaseModel):
+    agent_id: str
+    status: str  # "waiting" | "working" | "done" | "error"
+    progress: int
+    current_task: Optional[str] = None
+
+
+class Job(BaseModel):
+    id: str
+    name: str
+    description: str
+    agents: List[JobAgent]
+    status: JobStatus
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    progress: int = 0
+    repository: Optional[str] = None
+    activity_log: List[dict] = []  # {"timestamp", "agent_id", "message"}
+    artifacts: List[str] = []  # Files created
+
+
+class JobCreate(BaseModel):
+    name: str
+    description: str
+    agent_ids: List[str]
+    repository: Optional[str] = None
