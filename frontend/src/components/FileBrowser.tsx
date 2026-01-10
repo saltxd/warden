@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronRight, ChevronDown, File, Folder, Download, X } from 'lucide-react'
 import { API_URL } from '../config'
 
@@ -88,7 +88,7 @@ export function FileBrowser({ jobId, onClose }: FileBrowserProps) {
     setExpandedDirs(newExpanded)
   }
 
-  const renderTree = (node: Record<string, unknown>, path = '', depth = 0): JSX.Element[] => {
+  const renderTree = (node: Record<string, unknown>, path = '', depth = 0): React.ReactElement[] => {
     return Object.entries(node).map(([key, value]) => {
       const currentPath = path ? `${path}/${key}` : key
       const nodeValue = value as Record<string, unknown>
