@@ -1,0 +1,21 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: warden
+  namespace: warden
+spec:
+  entryPoints:
+    - web
+  routes:
+    # API routes go to backend
+    - match: Host(`warden.cluster.local`) && (PathPrefix(`/api`) || PathPrefix(`/chat`) || PathPrefix(`/jobs`) || PathPrefix(`/health`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))
+      kind: Rule
+      services:
+        - name: warden
+          port: 8000
+    # Everything else goes to frontend
+    - match: Host(`warden.cluster.local`)
+      kind: Rule
+      services:
+        - name: warden
+          port: 80

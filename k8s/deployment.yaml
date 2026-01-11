@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: warden
+  namespace: warden
+  labels:
+    app: warden
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: warden
+  template:
+    metadata:
+      labels:
+        app: warden
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        # Frontend container
+        - name: frontend
+          image: ghcr.io/saltxd/warden-frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+
+        # Backend container
+        - name: backend
+          image: ghcr.io/saltxd/warden-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: api
+          env:
+            - name: BUILD_SERVER_HOST
+              value: "10.0.2.10"
+            - name: BUILD_SERVER_USER
+              value: "admin"
+            - name: BUILD_SERVER_PORT
+              value: "22"
+            - name: TZ
+              value: "America/Denver"
+          volumeMounts:
+            - name: ssh-key
+              mountPath: /home/warden/.ssh
+              readOnly: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+      volumes:
+        - name: ssh-key
+          secret:
+            secretName: ssh-key
+            defaultMode: 0600
+            items:
+              - key: id_ed25519
+                path: id_ed25519
+              - key: known_hosts
+                path: known_hosts
