@@ -18,7 +18,7 @@ from ..services.background_jobs import (
     list_jobs,
     run_background_job,
 )
-from ..services.discord_notify import notify_job_started, notify_job_completed
+from ..services.discord_notify import send_job_started, update_job_completed
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -402,8 +402,8 @@ async def process_background_message(session_id: str, message: str, websocket: W
         }
     )
 
-    # Notify Discord that job started
-    await notify_job_started(job.id, message[:100])
+    # Notify Discord that job started (returns message_id for later editing)
+    discord_message_id = await send_job_started(job.id, message[:100])
 
     # Build the prompt
     history = CONVERSATIONS[session_id]
@@ -481,13 +481,16 @@ Complete the user's request:
             # Take last few meaningful lines as summary
             summary = "\n".join(completed_job.output_lines[-5:])
 
-        await notify_job_completed(
-            job_id=completed_job.id,
-            task=completed_job.task,
-            duration_seconds=duration,
-            success=(completed_job.status == JobStatus.COMPLETED),
-            summary=summary,
-        )
+        # Edit the Discord message to show completion
+        if discord_message_id:
+            await update_job_completed(
+                message_id=discord_message_id,
+                job_id=completed_job.id,
+                task=completed_job.task,
+                duration_seconds=duration,
+                success=(completed_job.status == JobStatus.COMPLETED),
+                summary=summary,
+            )
 
     # Start the background job
     asyncio.create_task(run_background_job(job, run_claude, on_complete))

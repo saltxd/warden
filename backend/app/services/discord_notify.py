@@ -9,101 +9,115 @@ logger = logging.getLogger(__name__)
 DISCORD_WEBHOOK_URL = "DISCORD_WEBHOOK_URL"
 
 
-async def send_discord_notification(
-    title: str,
-    description: str,
-    color: int = 0x33FF33,  # Green by default
-    fields: Optional[list[dict]] = None,
-    footer: Optional[str] = None,
-) -> bool:
+async def send_job_started(job_id: str, task: str) -> Optional[str]:
     """
-    Send a Discord embed notification to the Warden channel.
-
-    Args:
-        title: Embed title
-        description: Embed description
-        color: Embed color (hex)
-        fields: Optional list of {"name": str, "value": str, "inline": bool}
-        footer: Optional footer text
+    Send initial job notification and return message ID for later editing.
 
     Returns:
-        True if sent successfully
+        Message ID if successful, None otherwise
     """
     embed = {
-        "title": title,
-        "description": description,
-        "color": color,
+        "title": "Job Running",
+        "description": f"Background job `{job_id}` is running...",
+        "color": 0x3498DB,  # Blue
+        "fields": [
+            {"name": "Task", "value": task[:200], "inline": False},
+            {"name": "Status", "value": "In Progress", "inline": True},
+        ],
+        "footer": {"text": "Warden"},
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
-
-    if fields:
-        embed["fields"] = fields
-
-    if footer:
-        embed["footer"] = {"text": footer}
-    else:
-        embed["footer"] = {"text": "Warden"}
 
     payload = {"embeds": [embed]}
 
     try:
         async with aiohttp.ClientSession() as session:
+            # Use ?wait=true to get the message back with its ID
             async with session.post(
-                DISCORD_WEBHOOK_URL,
+                f"{DISCORD_WEBHOOK_URL}?wait=true",
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
-                if resp.status in (200, 204):
-                    logger.info(f"Discord notification sent: {title}")
-                    return True
+                if resp.status == 200:
+                    data = await resp.json()
+                    message_id = data.get("id")
+                    logger.info(f"Discord job notification sent: {job_id}, message_id: {message_id}")
+                    return message_id
                 else:
                     text = await resp.text()
                     logger.error(f"Discord notification failed: {resp.status} - {text}")
-                    return False
+                    return None
     except Exception as e:
         logger.exception(f"Failed to send Discord notification: {e}")
-        return False
+        return None
 
 
-async def notify_job_started(job_id: str, task: str) -> bool:
-    """Notify that a background job has started."""
-    return await send_discord_notification(
-        title="Job Started",
-        description=f"Background job `{job_id}` has started.",
-        color=0x3498DB,  # Blue
-        fields=[{"name": "Task", "value": task[:200], "inline": False}],
-    )
-
-
-async def notify_job_completed(
+async def update_job_completed(
+    message_id: str,
     job_id: str,
     task: str,
     duration_seconds: int,
     success: bool = True,
     summary: Optional[str] = None,
 ) -> bool:
-    """Notify that a background job has completed."""
+    """
+    Edit the job notification to show completion status.
+
+    Args:
+        message_id: The Discord message ID to edit
+        job_id: The job identifier
+        task: The task description
+        duration_seconds: How long the job took
+        success: Whether job succeeded
+        summary: Optional output summary
+
+    Returns:
+        True if edit successful
+    """
     if success:
         title = "Job Completed"
         color = 0x33FF33  # Green
-        emoji = ""
+        status = "Success"
     else:
         title = "Job Failed"
         color = 0xFF3333  # Red
-        emoji = ""
+        status = "Failed"
 
     fields = [
         {"name": "Task", "value": task[:200], "inline": False},
         {"name": "Duration", "value": f"{duration_seconds}s", "inline": True},
-        {"name": "Status", "value": f"{emoji} {'Success' if success else 'Failed'}", "inline": True},
+        {"name": "Status", "value": status, "inline": True},
     ]
 
     if summary:
-        fields.append({"name": "Summary", "value": summary[:500], "inline": False})
+        # Truncate summary for Discord field limit
+        fields.append({"name": "Output", "value": f"```\n{summary[:900]}\n```", "inline": False})
 
-    return await send_discord_notification(
-        title=title,
-        description=f"Background job `{job_id}` has finished.",
-        color=color,
-        fields=fields,
-    )
+    embed = {
+        "title": title,
+        "description": f"Background job `{job_id}` has finished.",
+        "color": color,
+        "fields": fields,
+        "footer": {"text": "Warden"},
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+    payload = {"embeds": [embed]}
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.patch(
+                f"{DISCORD_WEBHOOK_URL}/messages/{message_id}",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 200:
+                    logger.info(f"Discord job notification updated: {job_id}")
+                    return True
+                else:
+                    text = await resp.text()
+                    logger.error(f"Discord notification edit failed: {resp.status} - {text}")
+                    return False
+    except Exception as e:
+        logger.exception(f"Failed to edit Discord notification: {e}")
+        return False
