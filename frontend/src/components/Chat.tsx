@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { WS_URL } from '../config'
+import { API_URL, WS_URL } from '../config'
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
+}
+
+interface NodeStatus {
+  name: string
+  ip: string
+  role: string
+  status: 'ready' | 'down' | 'unknown'
 }
 
 // Strip markdown formatting from text
@@ -31,13 +38,13 @@ const colors = {
   gray: '#666666',
 }
 
-// Node status data
-const NODES = [
-  { name: 'bastion', ip: '10.0.2.10', role: 'LOCAL', status: 'READY' },
-  { name: 'k3s-cp-1', ip: '10.0.1.10', role: 'CP', status: 'READY' },
-  { name: 'k3s-cp-2', ip: '10.0.1.11', role: 'CP', status: 'READY' },
-  { name: 'k3s-cp-3', ip: '10.0.1.13', role: 'CP', status: 'READY' },
-  { name: 'wt-worker', ip: '10.0.1.12', role: 'WORKER', status: 'READY' },
+// Default nodes (used before API responds)
+const DEFAULT_NODES: NodeStatus[] = [
+  { name: 'bastion', ip: '10.0.2.10', role: 'local', status: 'unknown' },
+  { name: 'k3s-cp-1', ip: '10.0.1.10', role: 'control-plane', status: 'unknown' },
+  { name: 'k3s-cp-2', ip: '10.0.1.11', role: 'control-plane', status: 'unknown' },
+  { name: 'k3s-cp-3', ip: '10.0.1.13', role: 'control-plane', status: 'unknown' },
+  { name: 'wt-worker', ip: '10.0.1.12', role: 'worker', status: 'unknown' },
 ]
 
 export function Chat() {
@@ -51,11 +58,25 @@ export function Chat() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  const [nodes, setNodes] = useState<NodeStatus[]>(DEFAULT_NODES)
 
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const currentResponseRef = useRef('')
+
+  // Fetch node status
+  const fetchNodeStatus = async () => {
+    try {
+      const res = await fetch(`${API_URL}/nodes/status`)
+      if (res.ok) {
+        const data = await res.json()
+        setNodes(data.nodes)
+      }
+    } catch (err) {
+      console.error('Failed to fetch node status:', err)
+    }
+  }
 
   // Copy to clipboard
   const copyToClipboard = async (text: string, index: number) => {
@@ -81,6 +102,13 @@ export function Chat() {
     return () => clearInterval(timer)
   }, [])
 
+  // Fetch node status on mount and poll every 30s
+  useEffect(() => {
+    fetchNodeStatus()
+    const interval = setInterval(fetchNodeStatus, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
   // Keep ref in sync
   useEffect(() => {
     currentResponseRef.current = currentResponse
@@ -97,7 +125,10 @@ export function Chat() {
       const ws = new WebSocket(`${WS_URL}/chat/ws`)
       wsRef.current = ws
 
-      ws.onopen = () => setIsConnected(true)
+      ws.onopen = () => {
+        setIsConnected(true)
+        fetchNodeStatus() // Refresh nodes on connect
+      }
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
@@ -207,6 +238,23 @@ export function Chat() {
     return new Date(iso).toLocaleTimeString('en-US', { hour12: false })
   }
 
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'local': return 'LOCAL'
+      case 'control-plane': return 'CP'
+      case 'worker': return 'WORKER'
+      default: return role.toUpperCase()
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'ready': return colors.green
+      case 'down': return colors.red
+      default: return colors.gray
+    }
+  }
+
   return (
     <div
       style={{
@@ -247,6 +295,7 @@ export function Chat() {
           padding: '12px 16px',
           borderBottom: `1px solid ${colors.greenFaint}`,
           backgroundColor: 'rgba(0,0,0,0.5)',
+          flexShrink: 0,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -264,8 +313,9 @@ export function Chat() {
         </div>
       </header>
 
-      {/* Node status bar */}
+      {/* Node status bar - horizontally scrollable */}
       <div
+        className="node-bar"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -275,45 +325,52 @@ export function Chat() {
           fontSize: '10px',
           color: colors.greenDim,
           overflowX: 'auto',
+          overflowY: 'hidden',
+          flexShrink: 0,
+          WebkitOverflowScrolling: 'touch',
         }}
       >
-        <span style={{ color: colors.green, marginRight: '8px', whiteSpace: 'nowrap' }}>[ NODES ]</span>
-        {NODES.map((node, i) => (
+        <span style={{ color: colors.green, marginRight: '4px', whiteSpace: 'nowrap', flexShrink: 0 }}>[ NODES ]</span>
+        {nodes.map((node, i) => (
           <div
             key={node.name}
-            title={`${node.name} - ${node.ip}`}
+            className="node-badge"
+            title={`${node.name} - ${node.ip} - ${node.status.toUpperCase()}`}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               padding: '4px 8px',
-              border: `1px solid ${node.role === 'LOCAL' ? colors.cyanDim : colors.greenGhost}`,
-              backgroundColor: node.role === 'LOCAL' ? 'rgba(0,255,255,0.05)' : 'transparent',
+              border: `1px solid ${node.role === 'local' ? colors.cyanDim : node.status === 'down' ? colors.red : colors.greenGhost}`,
+              backgroundColor: node.role === 'local' ? 'rgba(0,255,255,0.05)' : node.status === 'down' ? 'rgba(255,51,51,0.05)' : 'transparent',
               whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             <span
-              className={node.status === 'READY' ? `node-dot node-dot-${i}` : ''}
+              className={node.status === 'ready' ? `node-dot node-dot-${i}` : ''}
               style={{
                 width: '6px',
                 height: '6px',
                 borderRadius: '50%',
-                backgroundColor: node.status === 'READY' ? colors.green : colors.red,
+                backgroundColor: getStatusColor(node.status),
+                flexShrink: 0,
               }}
             />
-            <span style={{ color: node.role === 'LOCAL' ? colors.cyan : colors.greenDim }}>
+            <span className="node-label" style={{ color: node.role === 'local' ? colors.cyan : colors.greenDim }}>
               {node.name}
             </span>
             <span
+              className="node-role"
               style={{
                 color: colors.bg,
-                backgroundColor: node.role === 'LOCAL' ? colors.cyan : node.role === 'CP' ? colors.green : colors.yellow,
+                backgroundColor: node.role === 'local' ? colors.cyan : node.role === 'control-plane' ? colors.green : colors.yellow,
                 padding: '0 4px',
                 fontSize: '8px',
                 fontWeight: 'bold',
               }}
             >
-              {node.role}
+              {getRoleLabel(node.role)}
             </span>
           </div>
         ))}
@@ -325,6 +382,7 @@ export function Chat() {
           flex: 1,
           overflowY: 'auto',
           padding: '16px',
+          minHeight: 0,
         }}
       >
         {messages.length === 0 && !isThinking && (
@@ -509,15 +567,33 @@ export function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
+      {/* Footer - moved above input */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: '4px 16px',
+          fontSize: '9px',
+          color: colors.gray,
+          borderTop: `1px solid ${colors.greenGhost}`,
+          flexShrink: 0,
+        }}
+      >
+        <span>bastion → K3s + Proxmox</span>
+        <span>↑↓ history | Enter send</span>
+      </div>
+
+      {/* Input - with safe area padding */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
           padding: '12px 16px',
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))',
           borderTop: `1px solid ${colors.greenFaint}`,
           backgroundColor: 'rgba(0,0,0,0.5)',
+          flexShrink: 0,
         }}
       >
         <span style={{ color: colors.cyan, fontSize: '14px' }}>▶</span>
@@ -554,7 +630,7 @@ export function Chat() {
             opacity: messages.length > 0 && !isThinking ? 1 : 0.5,
           }}
         >
-          [CLEAR]
+          [CLR]
         </button>
         <button
           onClick={sendMessage}
@@ -572,22 +648,6 @@ export function Chat() {
         >
           [SEND]
         </button>
-      </div>
-
-      {/* Status bar */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          padding: '4px 16px',
-          paddingBottom: 'max(4px, env(safe-area-inset-bottom))',
-          fontSize: '10px',
-          color: colors.gray,
-          borderTop: `1px solid ${colors.greenGhost}`,
-        }}
-      >
-        <span>bastion → K3s + Proxmox</span>
-        <span>↑↓ history | Enter to send</span>
       </div>
 
       {/* Animations */}
@@ -631,6 +691,29 @@ export function Chat() {
         .node-dot-2 { animation-delay: 0.8s; }
         .node-dot-3 { animation-delay: 1.2s; }
         .node-dot-4 { animation-delay: 1.6s; }
+
+        /* Node bar scrollbar hide */
+        .node-bar {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .node-bar::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* Compact mode for very small screens */
+        @media (max-width: 400px) {
+          .node-label {
+            display: none;
+          }
+          .node-role {
+            display: none;
+          }
+          .node-badge {
+            padding: 4px 6px !important;
+            gap: 0 !important;
+          }
+        }
 
         /* Connected status glow */
         @keyframes connected-glow {

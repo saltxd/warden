@@ -2,9 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install SSH client for connecting to bastion
+# Install SSH client and ping for node health checks
 RUN apt-get update && apt-get install -y \
     openssh-client \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
