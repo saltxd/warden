@@ -15,6 +15,7 @@ spec:
       labels:
         app: warden
     spec:
+      serviceAccountName: warden
       securityContext:
         fsGroup: 1000
       imagePullSecrets:

@@ -20,7 +20,18 @@ class K3sClient:
         self._load_config()
 
     def _load_config(self):
-        """Load kubeconfig from file."""
+        """Load kubeconfig - try in-cluster first, then file."""
+        # Try in-cluster config first (when running in K8s)
+        try:
+            config.load_incluster_config()
+            self.v1 = client.CoreV1Api()
+            self.connected = True
+            print("K3s client connected using in-cluster config")
+            return
+        except config.ConfigException:
+            pass  # Not running in cluster, try file
+
+        # Fall back to kubeconfig file (local development)
         try:
             config.load_kube_config(config_file=self.kubeconfig_path)
             self.v1 = client.CoreV1Api()
