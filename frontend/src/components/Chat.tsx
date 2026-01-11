@@ -68,7 +68,7 @@ export function Chat() {
   // Fetch node status
   const fetchNodeStatus = async () => {
     try {
-      const res = await fetch(`${API_URL}/nodes/status`)
+      const res = await fetch(`${API_URL}/api/nodes/status`)
       if (res.ok) {
         const data = await res.json()
         setNodes(data.nodes)

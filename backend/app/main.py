@@ -21,8 +21,8 @@ app.add_middleware(
 # Primary router - the chat
 app.include_router(chat.router)
 
-# Keep health for monitoring
-app.include_router(health.router)
+# Keep health for monitoring (under /api prefix for nginx routing)
+app.include_router(health.router, prefix="/api")
 
 # Keep jobs router for file browser functionality
 app.include_router(jobs.router)
