@@ -3,10 +3,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from ..config import settings
 
-# Discord webhook URL for Warden channel
-DISCORD_WEBHOOK_URL = "DISCORD_WEBHOOK_URL"
+logger = logging.getLogger(__name__)
 
 
 async def send_job_started(job_id: str, task: str) -> Optional[str]:
@@ -16,6 +15,10 @@ async def send_job_started(job_id: str, task: str) -> Optional[str]:
     Returns:
         Message ID if successful, None otherwise
     """
+    if not settings.DISCORD_WEBHOOK_URL:
+        logger.debug("Discord webhook not configured, skipping notification")
+        return None
+
     embed = {
         "title": "Job Running",
         "description": f"Background job `{job_id}` is running...",
@@ -34,7 +37,7 @@ async def send_job_started(job_id: str, task: str) -> Optional[str]:
         async with aiohttp.ClientSession() as session:
             # Use ?wait=true to get the message back with its ID
             async with session.post(
-                f"{DISCORD_WEBHOOK_URL}?wait=true",
+                f"{settings.DISCORD_WEBHOOK_URL}?wait=true",
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
@@ -74,6 +77,9 @@ async def update_job_completed(
     Returns:
         True if edit successful
     """
+    if not settings.DISCORD_WEBHOOK_URL:
+        return False
+
     if success:
         title = "Job Completed"
         color = 0x33FF33  # Green
@@ -107,7 +113,7 @@ async def update_job_completed(
     try:
         async with aiohttp.ClientSession() as session:
             async with session.patch(
-                f"{DISCORD_WEBHOOK_URL}/messages/{message_id}",
+                f"{settings.DISCORD_WEBHOOK_URL}/messages/{message_id}",
                 json=payload,
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:

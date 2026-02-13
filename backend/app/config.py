@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177"
 
+    # Discord
+    DISCORD_WEBHOOK_URL: str = ""  # Set via env var
+
     # Authentication
     API_KEY: str = ""  # Set via env var for production
 
