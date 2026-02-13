@@ -3,6 +3,8 @@ import asyncio
 from typing import Callable, Optional, Awaitable
 import logging
 
+from ..config import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +22,16 @@ class SSHService:
         self.port = port
         self._conn: Optional[asyncssh.SSHClientConnection] = None
 
+    def _get_known_hosts(self):
+        """Get known_hosts configuration."""
+        known_hosts_path = settings.SSH_KNOWN_HOSTS_PATH
+        if known_hosts_path:
+            try:
+                return asyncssh.read_known_hosts(known_hosts_path)
+            except Exception:
+                logger.warning(f"Could not read known_hosts from {known_hosts_path}, accepting all keys")
+        return None
+
     async def connect(self) -> "SSHService":
         """Establish SSH connection."""
         logger.info(f"Connecting to {self.username}@{self.host}...")
@@ -28,7 +40,7 @@ class SSHService:
                 self.host,
                 port=self.port,
                 username=self.username,
-                known_hosts=None,  # TODO: Use proper known_hosts in production
+                known_hosts=self._get_known_hosts(),
             )
             logger.info(f"Connected to {self.host}")
             return self
@@ -52,7 +64,7 @@ class SSHService:
             result = await asyncio.wait_for(self._conn.run(command), timeout=timeout)
             return result.stdout, result.stderr, result.exit_status
         except asyncio.TimeoutError:
-            logger.error(f"Command timed out: {command[:50]}...")
+            logger.error(f"Command timed out after {timeout}s: {command[:80]}...")
             raise
 
     async def run_streaming(
@@ -68,10 +80,9 @@ class SSHService:
 
         try:
             # Use request_pty to get unbuffered output (terminal mode)
-            # Also merge stderr into stdout for simpler handling
             process = await self._conn.create_process(
                 command,
-                term_type="xterm",  # Request pseudo-terminal for unbuffered output
+                term_type="xterm",
             )
 
             async def read_output():
@@ -79,13 +90,11 @@ class SSHService:
                 buffer = ""
                 async for chunk in process.stdout:
                     buffer += chunk
-                    # Process complete lines immediately
                     while "\n" in buffer:
                         line, buffer = buffer.split("\n", 1)
                         line = line.rstrip("\r")
                         if line:
                             await on_stdout(line)
-                # Handle any remaining content
                 if buffer.strip():
                     await on_stdout(buffer.strip())
 
@@ -104,17 +113,20 @@ class SSHService:
                 if buffer.strip():
                     await on_stderr(buffer.strip())
 
-            # Read both streams concurrently with timeout
             try:
                 await asyncio.wait_for(
                     asyncio.gather(read_output(), read_stderr()),
                     timeout=timeout,
                 )
             except asyncio.TimeoutError:
-                logger.warning("Stream reading timed out, terminating process")
+                logger.warning(f"Stream reading timed out after {timeout}s, terminating process")
                 process.terminate()
+                # Give process a moment to clean up, then force kill
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=5)
+                except asyncio.TimeoutError:
+                    process.kill()
 
-            # Wait for process to complete
             await process.wait()
             return process.exit_status or 0
 

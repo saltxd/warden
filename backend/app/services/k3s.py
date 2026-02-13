@@ -1,7 +1,10 @@
+import logging
 from kubernetes import client, config
 from typing import List, Dict
 from ..config import settings
 from ..models import K3sNode
+
+logger = logging.getLogger(__name__)
 
 # Map K3s nodes to their Proxmox hosts
 K3S_TO_PROXMOX = {
@@ -36,9 +39,9 @@ class K3sClient:
             config.load_kube_config(config_file=self.kubeconfig_path)
             self.v1 = client.CoreV1Api()
             self.connected = True
-            print(f"K3s client connected using {self.kubeconfig_path}")
+            logger.info(f"K3s client connected using {self.kubeconfig_path}")
         except Exception as e:
-            print(f"Warning: Could not connect to K3s: {e}")
+            logger.warning(f"Could not connect to K3s: {e}")
             self.connected = False
 
     def get_nodes(self) -> List[K3sNode]:
@@ -73,19 +76,48 @@ class K3sClient:
                 )
                 pod_count = len([p for p in pods.items if p.status.phase == "Running"])
 
+                # Try to get real metrics from metrics-server
+                cpu_percent = 0.0
+                ram_percent = 0.0
+                try:
+                    custom_api = client.CustomObjectsApi()
+                    node_metrics = custom_api.get_cluster_custom_object(
+                        "metrics.k8s.io", "v1beta1", "nodes", name
+                    )
+                    # Parse CPU (e.g., "250m" = 250 millicores)
+                    cpu_usage = node_metrics.get("usage", {}).get("cpu", "0")
+                    if cpu_usage.endswith("n"):
+                        cpu_nano = int(cpu_usage[:-1])
+                        cpu_percent = round(cpu_nano / 1e9 / 4 * 100, 1)  # Assume 4 cores
+                    elif cpu_usage.endswith("m"):
+                        cpu_milli = int(cpu_usage[:-1])
+                        cpu_percent = round(cpu_milli / 4000 * 100, 1)
+                    # Parse memory (e.g., "1234Ki")
+                    mem_usage = node_metrics.get("usage", {}).get("memory", "0")
+                    if mem_usage.endswith("Ki"):
+                        mem_kb = int(mem_usage[:-2])
+                        # Get allocatable memory from node status
+                        alloc_mem = node.status.allocatable.get("memory", "0")
+                        if alloc_mem.endswith("Ki"):
+                            total_kb = int(alloc_mem[:-2])
+                            if total_kb > 0:
+                                ram_percent = round(mem_kb / total_kb * 100, 1)
+                except Exception:
+                    pass  # metrics-server not available, use 0
+
                 result.append(K3sNode(
                     name=name,
                     status=status,
                     roles=roles,
-                    cpu_percent=0,  # Would need metrics-server for real values
-                    ram_percent=0,
+                    cpu_percent=cpu_percent,
+                    ram_percent=ram_percent,
                     pods=pod_count,
                     proxmox_host=K3S_TO_PROXMOX.get(name, "unknown"),
                 ))
 
             return result
         except Exception as e:
-            print(f"Error getting K3s nodes: {e}")
+            logger.error(f"Error getting K3s nodes: {e}")
             return []
 
     def get_pods_by_node(self) -> Dict[str, int]:
@@ -103,7 +135,7 @@ class K3sClient:
                         counts[node] = counts.get(node, 0) + 1
             return counts
         except Exception as e:
-            print(f"Error getting pods by node: {e}")
+            logger.error(f"Error getting pods by node: {e}")
             return {}
 
     def get_pod_count_for_proxmox_node(self, proxmox_node: str) -> int:

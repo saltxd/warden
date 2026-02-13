@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { API_URL } from '../config'
+import { API_URL, getHeaders } from '../config'
 
 interface Metrics {
   total_cpu_percent: number
@@ -26,7 +26,7 @@ export function useMetrics(): UseMetricsReturn {
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/nodes/metrics`)
+      const response = await fetch(`${API_URL}/nodes/metrics`, { headers: getHeaders() })
       if (!response.ok) {
         throw new Error(`Failed to fetch metrics: ${response.statusText}`)
       }
@@ -36,7 +36,6 @@ export function useMetrics(): UseMetricsReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setError(message)
-      console.error('Error fetching metrics:', message)
     } finally {
       setLoading(false)
     }
@@ -44,8 +43,6 @@ export function useMetrics(): UseMetricsReturn {
 
   useEffect(() => {
     fetchMetrics()
-
-    // Poll every 5 seconds for metrics
     const interval = setInterval(fetchMetrics, 5000)
     return () => clearInterval(interval)
   }, [fetchMetrics])

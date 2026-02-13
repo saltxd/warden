@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import type { Job, JobCreate } from '../types'
-import { API_URL, WS_URL } from '../config'
+import { API_URL, getHeaders, getAuthWsUrl } from '../config'
+import { showToast } from '../components/Toast'
 
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([])
@@ -9,7 +10,7 @@ export function useJobs() {
 
   const fetchJobs = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/jobs`)
+      const res = await fetch(`${API_URL}/jobs`, { headers: getHeaders() })
       if (!res.ok) throw new Error('Failed to fetch jobs')
       const data = await res.json()
       setJobs(data)
@@ -24,7 +25,7 @@ export function useJobs() {
   const createJob = async (data: Omit<JobCreate, 'agent_ids'> & { agentIds: string[] }) => {
     const res = await fetch(`${API_URL}/jobs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({
         name: data.name,
         description: data.description,
@@ -34,16 +35,26 @@ export function useJobs() {
     })
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({ detail: 'Failed to create job' }))
-      throw new Error(errorData.detail || 'Failed to create job')
+      const msg = errorData.detail || 'Failed to create job'
+      showToast('error', msg)
+      throw new Error(msg)
     }
     const job = await res.json()
     setJobs((prev) => [job, ...prev])
+    showToast('success', `Job "${job.name}" created`)
     return job
   }
 
   const cancelJob = async (jobId: string) => {
-    const res = await fetch(`${API_URL}/jobs/${jobId}/cancel`, { method: 'POST' })
-    if (!res.ok) throw new Error('Failed to cancel job')
+    const res = await fetch(`${API_URL}/jobs/${jobId}/cancel`, {
+      method: 'POST',
+      headers: getHeaders(),
+    })
+    if (!res.ok) {
+      showToast('error', 'Failed to cancel job')
+      throw new Error('Failed to cancel job')
+    }
+    showToast('info', 'Job cancelled')
     fetchJobs()
   }
 
@@ -68,7 +79,6 @@ export function useJobs() {
 
 /**
  * Hook for real-time job updates via WebSocket.
- * Use this when viewing a specific job to get streaming activity updates.
  */
 export function useJobStream(
   jobId: string | null,
@@ -85,11 +95,10 @@ export function useJobStream(
     }
 
     const connect = () => {
-      const ws = new WebSocket(`${WS_URL}/jobs/${jobId}/ws`)
+      const ws = new WebSocket(getAuthWsUrl(`/jobs/${jobId}/ws`))
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log(`WebSocket connected for job ${jobId}`)
         setConnected(true)
       }
 
@@ -97,7 +106,6 @@ export function useJobStream(
         try {
           const data = JSON.parse(event.data)
 
-          // Handle different message types
           if (data.type === 'state' || data.type === 'completed' ||
               data.type === 'progress' || data.type === 'started' ||
               data.type === 'agent_started' || data.type === 'cancelled') {
@@ -106,7 +114,6 @@ export function useJobStream(
               onJobUpdate?.(data.job)
             }
           } else if (data.type === 'activity') {
-            // Activity updates - update the job with new activity
             setStreamedJob((prev) => {
               if (!prev) return prev
               return {
@@ -121,20 +128,19 @@ export function useJobStream(
                 ],
               }
             })
-          } else if (data.type === 'ping') {
-            // Ignore ping messages
+          } else if (data.type === 'error') {
+            showToast('error', data.message || 'WebSocket error')
           }
         } catch (err) {
           console.error('Failed to parse WebSocket message:', err)
         }
       }
 
-      ws.onerror = (err) => {
-        console.error('WebSocket error:', err)
+      ws.onerror = () => {
+        showToast('error', 'Lost connection to job stream')
       }
 
       ws.onclose = () => {
-        console.log(`WebSocket disconnected for job ${jobId}`)
         setConnected(false)
       }
     }

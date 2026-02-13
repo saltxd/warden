@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from typing import List, Dict
 from datetime import datetime
+from pathlib import PurePosixPath
 import asyncio
 import uuid
 import logging
@@ -18,6 +19,20 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def validate_workspace_path(workspace: str, file_path: str) -> str:
+    """Validate that file_path stays within workspace. Returns resolved path or raises."""
+    # Normalize the path to prevent traversal
+    resolved = PurePosixPath(workspace) / PurePosixPath(file_path)
+    # Ensure the resolved path starts with the workspace
+    resolved_str = str(resolved)
+    if not resolved_str.startswith(workspace):
+        raise HTTPException(status_code=400, detail="Invalid file path: path traversal detected")
+    # Block obviously dangerous patterns
+    if ".." in file_path:
+        raise HTTPException(status_code=400, detail="Invalid file path: directory traversal not allowed")
+    return resolved_str
 
 # In-memory job store
 JOBS: Dict[str, Job] = {}
@@ -108,6 +123,9 @@ async def cancel_job(job_id: str):
     return {"status": "cancelled"}
 
 
+MAX_WS_CONNECTIONS_PER_JOB = 10
+
+
 @router.websocket("/{job_id}/ws")
 async def job_websocket(websocket: WebSocket, job_id: str):
     """WebSocket for real-time job updates."""
@@ -115,6 +133,13 @@ async def job_websocket(websocket: WebSocket, job_id: str):
 
     if job_id not in job_connections:
         job_connections[job_id] = []
+
+    # Enforce connection limit
+    if len(job_connections[job_id]) >= MAX_WS_CONNECTIONS_PER_JOB:
+        await websocket.send_json({"type": "error", "message": "Too many connections"})
+        await websocket.close(code=1008)
+        return
+
     job_connections[job_id].append(websocket)
 
     try:
@@ -375,7 +400,7 @@ async def get_file_content(job_id: str, file_path: str):
         raise HTTPException(status_code=404, detail="Job not found")
 
     workspace = f"{settings.PROJECTS_BASE_PATH}/{job_id}"
-    full_path = f"{workspace}/{file_path}"
+    full_path = validate_workspace_path(workspace, file_path)
 
     try:
         async with SSHService(
@@ -383,7 +408,8 @@ async def get_file_content(job_id: str, file_path: str):
             username=settings.BUILD_SERVER_USER,
             port=settings.BUILD_SERVER_PORT,
         ) as ssh:
-            stdout, stderr, code = await ssh.run(f"cat '{full_path}'", timeout=10)
+            # Use shlex-style quoting for safe shell execution
+            stdout, stderr, code = await ssh.run(f"cat -- '{full_path}'", timeout=10)
 
             if code != 0:
                 raise HTTPException(status_code=404, detail="File not found")
@@ -427,6 +453,9 @@ async def download_job(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
 
     workspace = f"{settings.PROJECTS_BASE_PATH}/{job_id}"
+    # Sanitize job_id to prevent injection in shell commands
+    if not job_id.replace("_", "").replace("-", "").isalnum():
+        raise HTTPException(status_code=400, detail="Invalid job ID")
 
     try:
         async with SSHService(
@@ -434,16 +463,27 @@ async def download_job(job_id: str):
             username=settings.BUILD_SERVER_USER,
             port=settings.BUILD_SERVER_PORT,
         ) as ssh:
+            # Check workspace size before zipping (max 500MB)
+            size_out, _, _ = await ssh.run(
+                f"du -sb '{workspace}' 2>/dev/null | cut -f1", timeout=10
+            )
+            try:
+                size_bytes = int(size_out.strip())
+                if size_bytes > 500 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="Workspace too large to download (>500MB)")
+            except ValueError:
+                pass  # If we can't determine size, proceed anyway
+
             # Create zip on remote
             zip_path = f"/tmp/{job_id}.zip"
             await ssh.run(
-                f"cd {workspace} && zip -r {zip_path} . "
+                f"cd '{workspace}' && zip -r '{zip_path}' . "
                 f"-x 'node_modules/*' -x '.git/*' -x '__pycache__/*' -x '.venv/*'",
                 timeout=60,
             )
 
             # Read zip content as base64
-            stdout, _, code = await ssh.run(f"base64 {zip_path}", timeout=30)
+            stdout, _, code = await ssh.run(f"base64 '{zip_path}'", timeout=30)
 
             if code != 0:
                 raise HTTPException(status_code=500, detail="Failed to create zip")
@@ -451,7 +491,7 @@ async def download_job(job_id: str):
             zip_bytes = base64.b64decode(stdout.strip())
 
             # Clean up temp file
-            await ssh.run(f"rm -f {zip_path}")
+            await ssh.run(f"rm -f '{zip_path}'")
 
             return Response(
                 content=zip_bytes,

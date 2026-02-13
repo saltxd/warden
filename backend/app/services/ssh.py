@@ -4,6 +4,9 @@ import asyncssh
 from typing import List, Optional, Callable, Awaitable, Tuple
 from datetime import datetime
 from ..config import settings, NODE_SSH_CONFIG
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SSHExecutor:
@@ -11,6 +14,7 @@ class SSHExecutor:
 
     def __init__(self):
         self.key_path = settings.SSH_KEY_PATH
+        self.known_hosts_path = settings.SSH_KNOWN_HOSTS_PATH
 
     def _get_node_config(self, node_id: str) -> Optional[Tuple[str, str]]:
         """Get IP and user for a node ID."""
@@ -22,6 +26,15 @@ class SSHExecutor:
     def _timestamp(self) -> str:
         """Get formatted timestamp for logs."""
         return datetime.now().strftime("%H:%M:%S")
+
+    def _get_known_hosts(self):
+        """Get known_hosts configuration."""
+        if self.known_hosts_path:
+            try:
+                return asyncssh.read_known_hosts(self.known_hosts_path)
+            except Exception:
+                logger.warning(f"Could not read known_hosts from {self.known_hosts_path}, accepting all keys")
+        return None
 
     async def execute_command(
         self,
@@ -61,7 +74,7 @@ class SSHExecutor:
                 ip,
                 username=user,
                 client_keys=[self.key_path],
-                known_hosts=None,  # Skip host key verification for homelab
+                known_hosts=self._get_known_hosts(),
             ) as conn:
                 await log(f"Connected successfully")
                 await log(f"Executing: {command}")
@@ -92,6 +105,9 @@ class SSHExecutor:
             return False, logs
         except asyncssh.PermissionDenied as e:
             await log(f"SSH permission denied: {e}")
+            return False, logs
+        except asyncssh.HostKeyNotVerifiable as e:
+            await log(f"SSH host key not verified: {e}")
             return False, logs
         except OSError as e:
             await log(f"Connection error: {e}")

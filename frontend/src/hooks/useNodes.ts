@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Node } from '../types'
-import { API_URL } from '../config'
+import { API_URL, getHeaders } from '../config'
 
 interface UseNodesReturn {
   nodes: Node[]
@@ -16,7 +16,7 @@ export function useNodes(): UseNodesReturn {
 
   const fetchNodes = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/nodes`)
+      const response = await fetch(`${API_URL}/nodes`, { headers: getHeaders() })
       if (!response.ok) {
         throw new Error(`Failed to fetch nodes: ${response.statusText}`)
       }
@@ -26,7 +26,6 @@ export function useNodes(): UseNodesReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       setError(message)
-      console.error('Error fetching nodes:', message)
     } finally {
       setLoading(false)
     }
@@ -34,8 +33,6 @@ export function useNodes(): UseNodesReturn {
 
   useEffect(() => {
     fetchNodes()
-
-    // Poll every 10 seconds
     const interval = setInterval(fetchNodes, 10000)
     return () => clearInterval(interval)
   }, [fetchNodes])

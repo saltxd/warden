@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { API_URL } from '../config'
+import { API_URL, getHeaders } from '../config'
 
 interface HealthStatus {
   status: 'ok' | 'degraded' | 'error'
@@ -27,7 +27,7 @@ export function useHealth(): UseHealthReturn {
 
   const fetchHealth = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/health`)
+      const response = await fetch(`${API_URL}/health`, { headers: getHeaders() })
       if (!response.ok) {
         throw new Error(`Health check failed: ${response.statusText}`)
       }
@@ -44,8 +44,6 @@ export function useHealth(): UseHealthReturn {
 
   useEffect(() => {
     fetchHealth()
-
-    // Check health every 30 seconds
     const interval = setInterval(fetchHealth, 30000)
     return () => clearInterval(interval)
   }, [fetchHealth])

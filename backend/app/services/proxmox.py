@@ -1,7 +1,10 @@
+import logging
 import httpx
 from typing import List, Dict, Any
 from ..config import settings
 from ..models import Node, NodeStatus, NodePosition
+
+logger = logging.getLogger(__name__)
 
 # Node position mapping (percentage-based for SVG)
 NODE_POSITIONS = {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Agent } from '../types'
-import { API_URL } from '../config'
+import { API_URL, getHeaders } from '../config'
 
 export function useAgents() {
   const [agents, setAgents] = useState<Agent[]>([])
@@ -12,7 +12,7 @@ export function useAgents() {
       try {
         const res = await fetch(`${API_URL}/agents`, {
           method: 'GET',
-          headers: { 'Accept': 'application/json' },
+          headers: getHeaders(),
         })
 
         if (!res.ok) {
@@ -20,7 +20,6 @@ export function useAgents() {
         }
 
         const data = await res.json()
-        console.log('Agents loaded:', data)
         setAgents(data)
         setError(null)
         setLoading(false)

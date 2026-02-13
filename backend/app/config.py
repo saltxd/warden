@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List, Dict
+from typing import List, Dict, Optional
 import os
 
 
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Proxmox
     PROXMOX_HOST: str = "10.0.0.10"
     PROXMOX_PORT: int = 8006
-    PROXMOX_TOKEN_ID: str = "monitoring@pve!monitoring"
+    PROXMOX_TOKEN_ID: str = ""
     PROXMOX_TOKEN_SECRET: str = ""
     PROXMOX_VERIFY_SSL: bool = False
 
@@ -36,9 +36,10 @@ class Settings(BaseSettings):
     # SSH
     SSH_USER: str = "root"
     SSH_KEY_PATH: str = os.path.expanduser("~/.ssh/id_ed25519")
+    SSH_KNOWN_HOSTS_PATH: Optional[str] = os.path.expanduser("~/.ssh/known_hosts")
 
     # Build Server (for Claude Code execution)
-    BUILD_SERVER_HOST: str = "10.0.2.10"  # bastion - dedicated build server
+    BUILD_SERVER_HOST: str = "10.0.2.10"
     BUILD_SERVER_USER: str = "admin"
     BUILD_SERVER_PORT: int = 22
     PROJECTS_BASE_PATH: str = "/home/admin/projects"
@@ -51,9 +52,16 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://localhost:5177"
 
+    # Authentication
+    API_KEY: str = ""  # Set via env var for production
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
+
+    @property
+    def auth_enabled(self) -> bool:
+        return bool(self.API_KEY)
 
     class Config:
         env_file = ".env"
