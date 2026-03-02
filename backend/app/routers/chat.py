@@ -19,10 +19,26 @@ from ..services.background_jobs import (
     run_background_job,
 )
 from ..services.discord_notify import send_job_started, update_job_completed
-from ..config import settings
+from ..config import settings, NODE_SSH_CONFIG
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+def _build_node_list_prompt() -> str:
+    """Build the node list section for Claude prompts from config."""
+    lines = []
+    k3s_nodes = []
+    proxmox_nodes = []
+    for name, cfg in NODE_SSH_CONFIG.items():
+        if name.startswith("proxmox"):
+            proxmox_nodes.append(f"{name} ({cfg['ip']})")
+        else:
+            role = "control plane" if "cp" in name else "worker node"
+            lines.append(f"- {name} ({cfg['ip']}) - K3s {role}")
+    if proxmox_nodes:
+        lines.append(f"- Proxmox nodes: {', '.join(proxmox_nodes)}")
+    return "\n".join(lines)
 
 
 def get_local_timestamp() -> str:
@@ -260,6 +276,7 @@ async def process_message(session_id: str, message: str, websocket: WebSocket):
     context = build_context(history)
 
     # Build the prompt
+    node_list = _build_node_list_prompt()
     prompt = f"""{context}
 
 USER MESSAGE:
@@ -270,12 +287,7 @@ USER MESSAGE:
 You are Warden, an AI assistant with access to a homelab via SSH.
 
 AVAILABLE NODES (SSH from this machine):
-- k3s-cp-1 (10.0.1.10) - Fort Zero, K3s control plane
-- k3s-cp-2 (10.0.1.11) - Watchtower, K3s control plane
-- k3s-cp-3 (10.0.1.13) - Sigil, K3s control plane
-- k3s-worker-1 (10.0.1.12) - Watchtower worker node
-- fz-dns / wt-dns - AdGuard DNS servers
-- Proxmox nodes: proxmox-0 (10.0.0.10), proxmox-1 (10.0.0.11), proxmox-2 (10.0.0.12), proxmox-3 (10.0.0.13)
+{node_list}
 
 CAPABILITIES:
 - SSH to any node and run commands
@@ -327,7 +339,7 @@ Respond to the user's message:
                     )
 
             await claude.run_agent(
-                workspace="/home/admin",
+                workspace=settings.WORKSPACE_PATH,
                 prompt=prompt,
                 on_output=on_output,
                 timeout=300,  # 5 min timeout for chat
@@ -409,6 +421,7 @@ async def process_background_message(session_id: str, message: str, websocket: W
     history = CONVERSATIONS[session_id]
     context = build_context(history[:-1])  # Exclude the "starting job" response
 
+    node_list = _build_node_list_prompt()
     prompt = f"""{context}
 
 USER MESSAGE:
@@ -419,12 +432,7 @@ USER MESSAGE:
 You are Warden, an AI assistant with access to a homelab via SSH.
 
 AVAILABLE NODES (SSH from this machine):
-- k3s-cp-1 (10.0.1.10) - Fort Zero, K3s control plane
-- k3s-cp-2 (10.0.1.11) - Watchtower, K3s control plane
-- k3s-cp-3 (10.0.1.13) - Sigil, K3s control plane
-- k3s-worker-1 (10.0.1.12) - Watchtower worker node
-- fz-dns / wt-dns - AdGuard DNS servers
-- Proxmox nodes: proxmox-0 (10.0.0.10), proxmox-1 (10.0.0.11), proxmox-2 (10.0.0.12), proxmox-3 (10.0.0.13)
+{node_list}
 
 CAPABILITIES:
 - SSH to any node and run commands
@@ -459,7 +467,7 @@ Complete the user's request:
                         await on_output(cleaned)
 
                 return await claude.run_agent(
-                    workspace="/home/admin",
+                    workspace=settings.WORKSPACE_PATH,
                     prompt=prompt,
                     on_output=wrapped_output,
                     timeout=600,  # 10 min for background jobs

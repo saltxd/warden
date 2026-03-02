@@ -2,17 +2,23 @@ from fastapi import APIRouter
 import asyncio
 from ..services.proxmox import proxmox_client
 from ..services.k3s import k3s_client
+from ..config import NODE_SSH_CONFIG, settings
 
 router = APIRouter(tags=["health"])
 
-# Node definitions
-NODES = [
-    {"name": "bastion", "ip": "10.0.2.10", "role": "local"},
-    {"name": "k3s-cp-1", "ip": "10.0.1.10", "role": "control-plane"},
-    {"name": "k3s-cp-2", "ip": "10.0.1.11", "role": "control-plane"},
-    {"name": "k3s-cp-3", "ip": "10.0.1.13", "role": "control-plane"},
-    {"name": "wt-worker", "ip": "10.0.1.12", "role": "worker"},
-]
+
+def _build_nodes_list() -> list[dict]:
+    """Build node list from config for health checks."""
+    nodes = [{"name": "bastion", "ip": settings.BUILD_SERVER_HOST, "role": "local"}]
+    for name, cfg in NODE_SSH_CONFIG.items():
+        if name.startswith("proxmox"):
+            continue
+        role = "control-plane" if "cp" in name else "worker"
+        nodes.append({"name": name, "ip": cfg["ip"], "role": role})
+    return nodes
+
+
+NODES = _build_nodes_list()
 
 
 async def check_node_status(ip: str) -> str:

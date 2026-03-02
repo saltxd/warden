@@ -1,21 +1,32 @@
 from pydantic_settings import BaseSettings
 from typing import List, Dict, Optional
+import json
 import os
 
 
-# Node SSH configuration (IP, user)
-NODE_SSH_CONFIG: Dict[str, Dict[str, str]] = {
+# Default node SSH configuration (overridable via NODE_SSH_CONFIG_JSON env var)
+_DEFAULT_NODE_SSH_CONFIG: Dict[str, Dict[str, str]] = {
     # Proxmox hosts - use root
     "proxmox-0": {"ip": "10.0.0.10", "user": "root"},
     "proxmox-1": {"ip": "10.0.0.11", "user": "root"},
     "proxmox-2": {"ip": "10.0.0.12", "user": "root"},
     "proxmox-3": {"ip": "10.0.0.13", "user": "root"},
-    # K3s nodes - use admin
+    # K3s nodes
     "k3s-cp-1": {"ip": "10.0.1.10", "user": "admin"},
     "k3s-cp-2": {"ip": "10.0.1.11", "user": "admin"},
     "k3s-cp-3": {"ip": "10.0.1.13", "user": "admin"},
     "k3s-worker-1": {"ip": "10.0.1.12", "user": "admin"},
 }
+
+
+def _load_node_config() -> Dict[str, Dict[str, str]]:
+    config_json = os.environ.get("NODE_SSH_CONFIG_JSON")
+    if config_json:
+        return json.loads(config_json)
+    return _DEFAULT_NODE_SSH_CONFIG
+
+
+NODE_SSH_CONFIG: Dict[str, Dict[str, str]] = _load_node_config()
 
 # Legacy mapping for backwards compatibility
 NODE_IPS: Dict[str, str] = {k: v["ip"] for k, v in NODE_SSH_CONFIG.items()}
@@ -43,6 +54,7 @@ class Settings(BaseSettings):
     BUILD_SERVER_USER: str = "admin"
     BUILD_SERVER_PORT: int = 22
     PROJECTS_BASE_PATH: str = "/home/admin/projects"
+    WORKSPACE_PATH: str = "/home/admin"
 
     # Agent execution timeouts
     AGENT_TIMEOUT: int = 600  # 10 minutes per agent
